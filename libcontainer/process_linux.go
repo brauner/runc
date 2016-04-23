@@ -248,13 +248,18 @@ func (p *initProcess) start() error {
 		return newSystemErrorWithCausef(err, "getting pipe fds for pid %d", p.pid())
 	}
 	p.setExternalDescriptors(fds)
-	// Do this before syncing with child so that no children
-	// can escape the cgroup
-	if err := p.manager.Apply(p.pid()); err != nil {
-		return newSystemErrorWithCause(err, "applying cgroup configuration for process")
+	// This is a safe access because .Start() already holds the mutex, so there's
+	// no need to add a safe NotRoot() method because we couldn't use it.
+	notroot := p.container.notRoot
+	if !notroot {
+		// Do this before syncing with child so that no children can escape the
+		// cgroup. We can't do this if we're not running as root.
+		if err := p.manager.Apply(p.pid()); err != nil {
+			return newSystemErrorWithCause(err, "applying cgroup configuration for process")
+		}
 	}
 	defer func() {
-		if err != nil {
+		if err != nil && !notroot {
 			// TODO: should not be the responsibility to call here
 			p.manager.Destroy()
 		}
@@ -283,8 +288,11 @@ loop:
 		}
 		switch procSync.Type {
 		case procReady:
-			if err := p.manager.Set(p.config.Config); err != nil {
-				return newSystemErrorWithCause(err, "setting cgroup config for ready process")
+			// We can't do any of this setup without being root.
+			if !notroot {
+				if err := p.manager.Set(p.config.Config); err != nil {
+					return newSystemErrorWithCause(err, "setting cgroup config for ready process")
+				}
 			}
 			// set oom_score_adj
 			if err := setOomScoreAdj(p.config.Config.OomScoreAdj, p.pid()); err != nil {
