@@ -1286,5 +1286,11 @@ func (c *linuxContainer) bootstrapData(cloneFlags uintptr, nsMaps map[configs.Na
 		}
 	}
 
+	// write rootless
+	r.AddData(&Boolmsg{
+		Type:  RootlessAttr,
+		Value: c.notRoot,
+	})
+
 	return bytes.NewReader(r.Serialize()), nil
 }

@@ -39,7 +39,7 @@ struct nsenter_config {
 	int      gidmap_len;
 	uint8_t  is_setgroup;
 	int      consolefd;
-	int      notroot;
+	uint8_t  is_rootless;
 };
 
 // list of known message types we want to send to bootstrap program
@@ -51,6 +51,7 @@ struct nsenter_config {
 #define UIDMAP_ATTR	    27284
 #define GIDMAP_ATTR	    27285
 #define SETGROUP_ATTR	    27286
+#define ROOTLESS_ATTR	    27287
 
 // Use raw setns syscall for versions of glibc that don't include it
 // (namely glibc-2.12)
@@ -241,7 +242,7 @@ static void start_child(int pipenum, jmp_buf *env, int syncpipe[2],
 	uint8_t syncbyte = 1;
 
 	// We have to do this before the fork if we're an unprivileged user.
-	if (config->notroot && config->cloneflags & CLONE_NEWUSER) {
+	if (config->is_rootless && config->cloneflags & CLONE_NEWUSER) {
 		int err = unshare(CLONE_NEWUSER);
 		if (err < 0) {
 			pr_perror("unable to unshare USERNS");
@@ -274,7 +275,7 @@ static void start_child(int pipenum, jmp_buf *env, int syncpipe[2],
 		exit(1);
 	}
 
-	if (!config->notroot) {
+	if (!config->is_rootless) {
 		if (config->is_setgroup)
 			update_process_setgroups(childpid, SETGROUPS_ALLOW);
 
@@ -387,6 +388,8 @@ static struct nsenter_config process_nl_attributes(int pipenum, char *data, int 
 			config.gidmap_len = payload_len;
 		} else if (nlattr->nla_type == SETGROUP_ATTR) {
 			config.is_setgroup = readint8(data + start);
+		} else if (nlattr->nla_type == ROOTLESS_ATTR) {
+			config.is_rootless = readint8(data + start);
 		} else {
 			pr_perror("Unknown netlink message type %d",
 				  nlattr->nla_type);
@@ -439,19 +442,10 @@ void nsexec(void)
 		exit(1);
 	}
 
-	struct nsenter_config config;
-
-	// Check whether we are a privileged user. This has to be done before
-	// we unshare (or setns) into a user namespace. The reason for checking this
-	// is that certain operations have to be done differently.
-	// XXX: We should probably pass this in bootstrap data.
-	int notroot = geteuid() != 0;
-
 	jmp_buf	env;
 	int	syncpipe[2] = {-1, -1};
-	config = process_nl_attributes(pipenum, data, nl_total_size);
-	config.notroot = notroot;
-
+	struct	nsenter_config config = process_nl_attributes(pipenum, data,
+							      nl_total_size);
 	// required clone_flags to be passed
 	if (config.cloneflags == -1) {
 		pr_perror("Missing clone_flags");
@@ -494,14 +488,13 @@ void nsexec(void)
 			exit(1);
 		}
 
-		/*
-		if (!config.notroot) {
+		// setgroups(2) is not allowed in rootless containers.
+		if (!config.is_rootless) {
 			if (setgroups(0, NULL) == -1) {
 				pr_perror("setgroups failed");
 				exit(1);
 			}
 		}
-		*/
 
 		if (consolefd != -1) {
 			if (ioctl(consolefd, TIOCSCTTY, 0) == -1) {
