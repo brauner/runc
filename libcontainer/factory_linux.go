@@ -239,6 +239,12 @@ func (l *LinuxFactory) Load(id string) (Container, error) {
 	if err != nil {
 		return nil, err
 	}
+	// XXX: We should store this in state.json so that this can be consistent
+	//      for an exec that is run as root while the container was not.
+	notroot, err := haveMappingRights(&state.Config)
+	if err != nil {
+		return nil, newGenericError(err, ConfigInvalid)
+	}
 	r := &nonChildProcess{
 		processPid:       state.InitProcessPid,
 		processStartTime: state.InitProcessStartTime,
@@ -254,6 +260,7 @@ func (l *LinuxFactory) Load(id string) (Container, error) {
 		cgroupManager: l.NewCgroupsManager(state.Config.Cgroups, state.CgroupPaths),
 		root:          containerRoot,
 		created:       state.Created,
+		notRoot:       notroot,
 	}
 	c.state = &loadedState{c: c}
 	if err := c.refreshState(); err != nil {

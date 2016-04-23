@@ -356,7 +356,23 @@ static struct nsenter_config process_nl_attributes(int pipenum, char *data, int 
 				nslist[i] = ns;
 			}
 
+			// We need to setns() to the user namespace if there is one.
+			int userns = -1;
 			for (i = 0; i < nslen; i++) {
+				if (strstr(nslist[i], "user") != NULL) {
+					userns = i;
+					if (setns(fds[i], 0) != 0) {
+						pr_perror("failed to setns to %s", nslist[i]);
+						exit(1);
+					}
+					close(fds[i]);
+				}
+			}
+
+			for (i = 0; i < nslen; i++) {
+				if (i == userns)
+					continue;
+
 				if (setns(fds[i], 0) != 0) {
 					pr_perror("Failed to setns to %s", nslist[i]);
 					exit(1);
@@ -423,22 +439,24 @@ void nsexec(void)
 		exit(1);
 	}
 
+	struct nsenter_config config;
+
+	// Check whether we are a privileged user. This has to be done before
+	// we unshare (or setns) into a user namespace. The reason for checking this
+	// is that certain operations have to be done differently.
+	// XXX: We should probably pass this in bootstrap data.
+	int notroot = geteuid() != 0;
+
 	jmp_buf	env;
 	int	syncpipe[2] = {-1, -1};
-	struct	nsenter_config config = process_nl_attributes(pipenum,
-						data, nl_total_size);
+	config = process_nl_attributes(pipenum, data, nl_total_size);
+	config.notroot = notroot;
 
 	// required clone_flags to be passed
 	if (config.cloneflags == -1) {
 		pr_perror("Missing clone_flags");
 		exit(1);
 	}
-
-	// Check whether we are a privileged user. This has to be done before
-	// we unshare into a user namespace. The reason for checking this is that
-	// certain operations have to be done differently.
-	// XXX: We should probably pass this in bootstrap data.
-	config.notroot = geteuid() != 0;
 
 	// prepare sync pipe between parent and child. We need this to let the
 	// child know that the parent has finished setting up
@@ -476,12 +494,14 @@ void nsexec(void)
 			exit(1);
 		}
 
+		/*
 		if (!config.notroot) {
 			if (setgroups(0, NULL) == -1) {
 				pr_perror("setgroups failed");
 				exit(1);
 			}
 		}
+		*/
 
 		if (consolefd != -1) {
 			if (ioctl(consolefd, TIOCSCTTY, 0) == -1) {
