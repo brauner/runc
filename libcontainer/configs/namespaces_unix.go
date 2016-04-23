@@ -80,7 +80,7 @@ type Namespace struct {
 	Path string        `json:"path"`
 }
 
-func (n *Namespace) GetPath(pid int) string {
+func (n Namespace) GetPath(pid int) string {
 	if n.Path != "" {
 		return n.Path
 	}
@@ -105,8 +105,8 @@ func (n *Namespaces) Add(t NamespaceType, path string) {
 	(*n)[i].Path = path
 }
 
-func (n *Namespaces) index(t NamespaceType) int {
-	for i, ns := range *n {
+func (n Namespaces) index(t NamespaceType) int {
+	for i, ns := range n {
 		if ns.Type == t {
 			return i
 		}
@@ -114,14 +114,14 @@ func (n *Namespaces) index(t NamespaceType) int {
 	return -1
 }
 
-func (n *Namespaces) Contains(t NamespaceType) bool {
+func (n Namespaces) Contains(t NamespaceType) bool {
 	return n.index(t) != -1
 }
 
-func (n *Namespaces) PathOf(t NamespaceType) string {
+func (n Namespaces) PathOf(t NamespaceType) string {
 	i := n.index(t)
 	if i == -1 {
 		return ""
 	}
-	return (*n)[i].Path
+	return n[i].Path
 }
