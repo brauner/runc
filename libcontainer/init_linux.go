@@ -51,7 +51,7 @@ type initConfig struct {
 	ProcessLabel     string           `json:"process_label"`
 	AppArmorProfile  string           `json:"apparmor_profile"`
 	NoNewPrivileges  bool             `json:"no_new_privileges"`
-	NotRoot          bool             `json:"not_root"`
+	Rootless         bool             `json:"rootless"`
 	User             string           `json:"user"`
 	Config           *configs.Config  `json:"config"`
 	Console          string           `json:"console"`
@@ -130,7 +130,7 @@ func finalizeNamespace(config *initConfig) error {
 	if err := system.SetKeepCaps(); err != nil {
 		return err
 	}
-	if !config.NotRoot {
+	if !config.Rootless {
 		if err := setupUser(config); err != nil {
 			return err
 		}

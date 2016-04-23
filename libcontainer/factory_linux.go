@@ -149,12 +149,12 @@ type LinuxFactory struct {
 	NewCgroupsManager func(config *configs.Cgroup, paths map[string]string) cgroups.Manager
 }
 
-func haveMappingRights(config *configs.Config) (bool, error) {
+func isRootless(config *configs.Config) (bool, error) {
 	// There are two cases where we have to bail. If the user is trying to run
 	// without user namespaces or if they are trying to run with user namespaces
 	// where the remapping isn't their own user. These only apply for non-root
 	// users.
-	notroot := false
+	rootless := false
 
 	rootuid, err := config.HostUID()
 	if err != nil {
@@ -168,7 +168,7 @@ func haveMappingRights(config *configs.Config) (bool, error) {
 			return false, fmt.Errorf("rootless containers cannot map container root to a different host user")
 		}
 		// Thus, we are going to be running under unprivileged user namespaces.
-		notroot = true
+		rootless = true
 	}
 	rootgid, err := config.HostGID()
 	if err != nil {
@@ -176,12 +176,12 @@ func haveMappingRights(config *configs.Config) (bool, error) {
 	}
 	// Similar to the above test, we need to make sure that we aren't trying to
 	// map to a group ID that we don't have the right to be.
-	if notroot && rootgid != os.Getegid() {
+	if rootless && rootgid != os.Getegid() {
 		return false, fmt.Errorf("rootless containers cannot map container root to a different host group")
 	}
 
 	// We can only map one user and group inside a container (our own).
-	if notroot {
+	if rootless {
 		if len(config.UidMappings) != 1 || config.UidMappings[0].Size != 1 {
 			return false, fmt.Errorf("rootless containers cannot map more than one user")
 		}
@@ -190,7 +190,7 @@ func haveMappingRights(config *configs.Config) (bool, error) {
 		}
 	}
 
-	return notroot, nil
+	return rootless, nil
 }
 
 func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, error) {
@@ -203,7 +203,7 @@ func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, err
 	if err := l.Validator.Validate(config); err != nil {
 		return nil, newGenericError(err, ConfigInvalid)
 	}
-	notroot, err := haveMappingRights(config)
+	rootless, err := isRootless(config)
 	if err != nil {
 		return nil, newGenericError(err, ConfigInvalid)
 	}
@@ -224,7 +224,7 @@ func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, err
 		initArgs:      l.InitArgs,
 		criuPath:      l.CriuPath,
 		cgroupManager: l.NewCgroupsManager(config.Cgroups, nil),
-		notRoot:       notroot,
+		rootless:      rootless,
 	}
 	c.state = &stoppedState{c: c}
 	return c, nil
@@ -254,7 +254,7 @@ func (l *LinuxFactory) Load(id string) (Container, error) {
 		cgroupManager: l.NewCgroupsManager(state.Config.Cgroups, state.CgroupPaths),
 		root:          containerRoot,
 		created:       state.Created,
-		notRoot:       state.Rootless,
+		rootless:      state.Rootless,
 	}
 	c.state = &loadedState{c: c}
 	if err := c.refreshState(); err != nil {

@@ -248,10 +248,9 @@ func (p *initProcess) start() error {
 		return newSystemErrorWithCausef(err, "getting pipe fds for pid %d", p.pid())
 	}
 	p.setExternalDescriptors(fds)
-	// This is a safe access because .Start() already holds the mutex, so there's
-	// no need to add a safe NotRoot() method because we couldn't use it.
-	notroot := p.container.notRoot
-	if !notroot {
+	// This (and all other) accesses of .rootless are safe because .Start() holds
+	// the container-wide mutex.
+	if !p.container.rootless {
 		// Do this before syncing with child so that no children can escape the
 		// cgroup. We can't do this if we're not running as root.
 		if err := p.manager.Apply(p.pid()); err != nil {
@@ -259,7 +258,7 @@ func (p *initProcess) start() error {
 		}
 	}
 	defer func() {
-		if err != nil && !notroot {
+		if err != nil && !p.container.rootless {
 			// TODO: should not be the responsibility to call here
 			p.manager.Destroy()
 		}
@@ -288,8 +287,8 @@ loop:
 		}
 		switch procSync.Type {
 		case procReady:
-			// We can't do any of this setup without being root.
-			if !notroot {
+			// We can't set cgroups if we're in a rootless container.
+			if !p.container.rootless {
 				if err := p.manager.Set(p.config.Config); err != nil {
 					return newSystemErrorWithCause(err, "setting cgroup config for ready process")
 				}
