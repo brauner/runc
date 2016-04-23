@@ -39,6 +39,7 @@ struct nsenter_config {
 	int      gidmap_len;
 	uint8_t  is_setgroup;
 	int      consolefd;
+	int      notroot;
 };
 
 // list of known message types we want to send to bootstrap program
@@ -84,8 +85,7 @@ static int clone_parent(jmp_buf *env, int flags)
 	int		 child;
 
 	ca.env = env;
-	child  = clone(child_func, ca.stack_ptr, CLONE_PARENT | SIGCHLD | flags,
-		      &ca);
+	child  = clone(child_func, ca.stack_ptr, CLONE_PARENT | SIGCHLD | flags, &ca);
 	// On old kernels, CLONE_PARENT cannot work with CLONE_NEWPID,
 	// unshare before clone to workaround this.
 	if (child == -1 && errno == EINVAL) {
@@ -93,8 +93,7 @@ static int clone_parent(jmp_buf *env, int flags)
 			pr_perror("Unable to unshare namespaces");
 			return -1;
 		}
-		child  = clone(child_func, ca.stack_ptr, SIGCHLD | CLONE_PARENT,
-			      &ca);
+		child = clone(child_func, ca.stack_ptr, CLONE_PARENT | SIGCHLD, &ca);
 	}
 	return child;
 }
@@ -150,9 +149,9 @@ static uint8_t readint8(char *buf)
 
 static void update_process_idmap(char *pathfmt, int pid, char *map, int map_len)
 {
-	char    buf[PATH_MAX];
-	int	len;
-	int	fd;
+	int fd;
+	int len;
+	char buf[PATH_MAX] = {0};
 
 	len = snprintf(buf, sizeof(buf), pathfmt, pid);
 	if (len < 0) {
@@ -190,44 +189,48 @@ static void update_process_uidmap(int pid, char *map, int map_len)
 	update_process_idmap("/proc/%d/uid_map", pid, map, map_len);
 }
 
-static void update_process_gidmap(int pid, uint8_t is_setgroup, char *map, int map_len)
+#define SETGROUPS_ALLOW "allow"
+#define SETGROUPS_DENY  "deny"
+
+static void update_process_setgroups(int pid, char *action) {
+	int	fd;
+	int len;
+	char path[PATH_MAX] = {0};
+
+	len = snprintf(path, PATH_MAX, "/proc/%d/setgroups", pid);
+	if (len < 0) {
+		pr_perror("failed to construct setgroups path for %d", pid);
+		exit(1);
+	}
+
+	fd = open(path, O_RDWR);
+	if (fd == -1) {
+		pr_perror("failed to open %s", path);
+		exit(1);
+	}
+
+	if (write(fd, action, strlen(action)) != strlen(action)) {
+		// If the kernel is too old to support
+		// /proc/PID/setgroups, write will return
+		// ENOENT; this is OK.
+		if (errno != ENOENT) {
+			pr_perror("failed to write %s to %s", action, path);
+			close(fd);
+			exit(1);
+		}
+	}
+
+	close(fd);
+}
+
+static void update_process_gidmap(int pid, char *map, int map_len)
 {
 	if ((map == NULL) || (map_len <= 0)) {
 		return;
 	}
 
-	if (is_setgroup == 1) {
-		int	fd;
-		int	len;
-		char	buf[PATH_MAX];
-
-		len = snprintf(buf, sizeof(buf), "/proc/%d/setgroups", pid);
-		if (len < 0) {
-			pr_perror("failed to get setgroups path for %d", pid);
-			exit(1);
-		}
-
-		fd = open(buf, O_RDWR);
-		if (fd == -1) {
-			pr_perror("failed to open %s", buf);
-			exit(1);
-		}
-		if (write(fd, "allow", 5) != 5) {
-			// If the kernel is too old to support
-			// /proc/PID/setgroups, write will return
-			// ENOENT; this is OK.
-			if (errno != ENOENT) {
-				pr_perror("failed to write allow to %s", buf);
-				close(fd);
-				exit(1);
-			}
-		}
-		close(fd);
-	}
-
 	update_process_idmap("/proc/%d/gid_map", pid, map, map_len);
 }
-
 
 static void start_child(int pipenum, jmp_buf *env, int syncpipe[2],
 		 struct nsenter_config *config)
@@ -236,6 +239,31 @@ static void start_child(int pipenum, jmp_buf *env, int syncpipe[2],
 	int     childpid;
 	char    buf[PATH_MAX];
 	uint8_t syncbyte = 1;
+
+	// We have to do this before the fork if we're an unprivileged user.
+	if (config->notroot && config->cloneflags & CLONE_NEWUSER) {
+		int err = unshare(CLONE_NEWUSER);
+		if (err < 0) {
+			pr_perror("unable to unshare USERNS");
+			exit(1);
+		}
+
+		// Since Linux 3.19 unprivileged writing to /proc/self/gid_map requires
+		// having /proc/self/setcgroups set to deny to disallow setgroups(2) in
+		// the new namespace.
+		if(config->is_setgroup) {
+			fprintf(stderr, "nsenter: cannot allow setgroup in an unprivileged user namespace setup\n");
+			exit(1);
+		}
+
+		// Set up the uid and gid mappings.
+		update_process_setgroups(getpid(), SETGROUPS_DENY);
+		update_process_uidmap(getpid(), config->uidmap, config->uidmap_len);
+		update_process_gidmap(getpid(), config->gidmap, config->gidmap_len);
+
+		// Modify clone flags to not include the user namespace.
+		config->cloneflags &= ~CLONE_NEWUSER;
+	}
 
 	// We must fork to actually enter the PID namespace, use CLONE_PARENT
 	// so the child can have the right parent, and we don't need to forward
@@ -246,10 +274,13 @@ static void start_child(int pipenum, jmp_buf *env, int syncpipe[2],
 		exit(1);
 	}
 
-	// update uid_map and gid_map for the child process if they
-	// were provided
-	update_process_uidmap(childpid, config->uidmap, config->uidmap_len);
-	update_process_gidmap(childpid, config->is_setgroup, config->gidmap, config->gidmap_len);
+	if (!config->notroot) {
+		if (config->is_setgroup)
+			update_process_setgroups(childpid, SETGROUPS_ALLOW);
+
+		update_process_uidmap(childpid, config->uidmap, config->uidmap_len);
+		update_process_gidmap(childpid, config->gidmap, config->gidmap_len);
+	}
 
 	// Send the sync signal to the child
 	close(syncpipe[0]);
@@ -402,6 +433,13 @@ void nsexec(void)
 		pr_perror("Missing clone_flags");
 		exit(1);
 	}
+
+	// Check whether we are a privileged user. This has to be done before
+	// we unshare into a user namespace. The reason for checking this is that
+	// certain operations have to be done differently.
+	// XXX: We should probably pass this in bootstrap data.
+	config.notroot = geteuid() != 0;
+
 	// prepare sync pipe between parent and child. We need this to let the
 	// child know that the parent has finished setting up
 	if (pipe(syncpipe) != 0) {
@@ -437,10 +475,12 @@ void nsexec(void)
 			pr_perror("setgid failed");
 			exit(1);
 		}
-    
-		if (setgroups(0, NULL) == -1) {
-			pr_perror("setgroups failed");
-			exit(1);
+
+		if (!config.notroot) {
+			if (setgroups(0, NULL) == -1) {
+				pr_perror("setgroups failed");
+				exit(1);
+			}
 		}
 
 		if (consolefd != -1) {
