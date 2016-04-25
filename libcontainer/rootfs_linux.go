@@ -28,7 +28,7 @@ const defaultMountFlags = syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NOD
 // needsSetupDev returns true if /dev needs to be set up.
 func needsSetupDev(config *configs.Config) bool {
 	for _, m := range config.Mounts {
-		if m.Device == "bind" && (m.Destination == "/dev" || m.Destination == "/dev/") {
+		if m.Device == "bind" && libcontainerUtils.CleanPath(m.Destination) == "/dev" {
 			return false
 		}
 	}
@@ -713,7 +713,7 @@ func mountPropagate(m *configs.Mount, rootfs string, mountLabel string) error {
 		data  = label.FormatMountLabel(m.Data, mountLabel)
 		flags = m.Flags
 	)
-	if dest == "/dev" {
+	if libcontainerUtils.CleanPath(dest) == "/dev" {
 		flags &= ^syscall.MS_RDONLY
 	}
 	if !strings.HasPrefix(dest, rootfs) {
