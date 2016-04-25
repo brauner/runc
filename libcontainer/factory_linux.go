@@ -207,6 +207,11 @@ func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, err
 	if err != nil {
 		return nil, newGenericError(err, ConfigInvalid)
 	}
+	if rootless {
+		if err := new(validate.RootlessValidator).Validate(config); err != nil {
+			return nil, newGenericError(err, ConfigInvalid)
+		}
+	}
 	containerRoot := filepath.Join(l.Root, id)
 	if _, err := os.Stat(containerRoot); err == nil {
 		return nil, newGenericError(fmt.Errorf("container with id exists: %v", id), IdInUse)
