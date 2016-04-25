@@ -130,10 +130,8 @@ func finalizeNamespace(config *initConfig) error {
 	if err := system.SetKeepCaps(); err != nil {
 		return err
 	}
-	if !config.Rootless {
-		if err := setupUser(config); err != nil {
-			return err
-		}
+	if err := setupUser(config); err != nil {
+		return err
 	}
 	if err := system.ClearKeepCaps(); err != nil {
 		return err
@@ -213,6 +211,12 @@ func setupUser(config *initConfig) error {
 		return err
 	}
 
+	// We cannot set any additional groups in a rootless container and thus we
+	// bail if the user asked us to do so. XXX: We should probably do this earlier.
+	if config.Rootless && len(config.Config.AdditionalGroups) > 0 {
+		return fmt.Errorf("cannot set any additional groups in a rootless container")
+	}
+
 	var addGroups []int
 	if len(config.Config.AdditionalGroups) > 0 {
 		addGroups, err = user.GetAdditionalGroupsPath(config.Config.AdditionalGroups, groupPath)
@@ -220,22 +224,29 @@ func setupUser(config *initConfig) error {
 			return err
 		}
 	}
+
 	// before we change to the container's user make sure that the processes STDIO
 	// is correctly owned by the user that we are switching to.
 	if err := fixStdioPermissions(execUser); err != nil {
 		return err
 	}
-	suppGroups := append(execUser.Sgids, addGroups...)
-	if err := syscall.Setgroups(suppGroups); err != nil {
-		return err
+
+	// This isn't allowed in an unprivileged user namespace since Linux 3.19.
+	if !config.Rootless {
+		suppGroups := append(execUser.Sgids, addGroups...)
+		if err := syscall.Setgroups(suppGroups); err != nil {
+			return err
+		}
 	}
 
 	if err := system.Setgid(execUser.Gid); err != nil {
 		return err
 	}
+
 	if err := system.Setuid(execUser.Uid); err != nil {
 		return err
 	}
+
 	// if we didn't get HOME already, set it based on the user's HOME
 	if envHome := os.Getenv("HOME"); envHome == "" {
 		if err := os.Setenv("HOME", execUser.Home); err != nil {
