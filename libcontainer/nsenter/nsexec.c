@@ -42,6 +42,11 @@ struct nsenter_config {
 	uint8_t  is_rootless;
 };
 
+// In case CLONE_NEWUSER isn't defined.
+#if !defined(CLONE_NEWUSER)
+#	define CLONE_NEWUSER (1 << 28)
+#endif
+
 // list of known message types we want to send to bootstrap program
 // These are defined in libcontainer/message_linux.go
 #define INIT_MSG	    62000
