@@ -241,7 +241,7 @@ func (m *Manager) Freeze(state configs.FreezerState) error {
 }
 
 func (m *Manager) GetPids() ([]int, error) {
-	dir, err := getCgroupPath(m.Cgroups)
+	dir, err := GetCgroupPath(m.Cgroups)
 	if err != nil {
 		return nil, err
 	}
@@ -249,14 +249,14 @@ func (m *Manager) GetPids() ([]int, error) {
 }
 
 func (m *Manager) GetAllPids() ([]int, error) {
-	dir, err := getCgroupPath(m.Cgroups)
+	dir, err := GetCgroupPath(m.Cgroups)
 	if err != nil {
 		return nil, err
 	}
 	return cgroups.GetAllPids(dir)
 }
 
-func getCgroupPath(c *configs.Cgroup) (string, error) {
+func GetCgroupPath(c *configs.Cgroup) (string, error) {
 	d, err := getCgroupData(c, 0)
 	if err != nil {
 		return "", err
