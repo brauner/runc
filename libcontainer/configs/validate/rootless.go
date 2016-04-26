@@ -45,30 +45,10 @@ func (v *RootlessValidator) cgroup(config *configs.Config) error {
 	left := reflect.ValueOf(*config.Cgroups.Resources)
 	right := reflect.Zero(left.Type())
 
-	// Unfortunately this isn't all we need to do, because at this point specconv
-	// has already added a bunch of rules to the devices cgroup. So we have to
-	// check against each field separately.
-	if reflect.DeepEqual(left.Interface(), right.Interface()) {
-		return nil
-	}
-
-	// Iterate over the fields of each resource.
-	for i := 0; i < left.NumField(); i++ {
-		name := left.Type().Field(i).Name
-
-		// XXX: I'm not sure what to do with device cgroups.
-		if strings.Contains(name, "Device") {
-			continue
-		}
-
-		// Get the field values.
-		l := left.FieldByName(name)
-		r := right.FieldByName(name)
-
-		// Check that they are equal.
-		if !reflect.DeepEqual(l.Interface(), r.Interface()) {
-			return fmt.Errorf("cannot specify resource limits in rootless container: field %q is non-default", name)
-		}
+	// This is all we need to do, since specconv won't add cgroup options in
+	// rootless mode.
+	if !reflect.DeepEqual(left.Interface(), right.Interface()) {
+		return fmt.Errorf("cannot specify resource limits in rootless container")
 	}
 
 	return nil

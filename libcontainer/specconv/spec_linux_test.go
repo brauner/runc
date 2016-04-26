@@ -15,7 +15,13 @@ func TestLinuxCgroupsPathSpecified(t *testing.T) {
 	spec := &specs.Spec{}
 	spec.Linux.CgroupsPath = &cgroupsPath
 
-	cgroup, err := createCgroupConfig("ContainerID", false, spec)
+	opts := &CreateOpts{
+		CgroupName:       "ContainerID",
+		UseSystemdCgroup: false,
+		Spec:             spec,
+	}
+
+	cgroup, err := createCgroupConfig(opts)
 	if err != nil {
 		t.Errorf("Couldn't create Cgroup config: %v", err)
 	}
@@ -27,8 +33,13 @@ func TestLinuxCgroupsPathSpecified(t *testing.T) {
 
 func TestLinuxCgroupsPathNotSpecified(t *testing.T) {
 	spec := &specs.Spec{}
+	opts := &CreateOpts{
+		CgroupName:       "ContainerID",
+		UseSystemdCgroup: false,
+		Spec:             spec,
+	}
 
-	cgroup, err := createCgroupConfig("ContainerID", false, spec)
+	cgroup, err := createCgroupConfig(opts)
 	if err != nil {
 		t.Errorf("Couldn't create Cgroup config: %v", err)
 	}
