@@ -146,6 +146,7 @@ type CreateOpts struct {
 	UseSystemdCgroup bool
 	NoPivotRoot      bool
 	Spec             *specs.Spec
+	Rootless         bool
 }
 
 // CreateLibcontainerConfig creates a new libcontainer configuration from a
@@ -175,6 +176,7 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 		Readonlyfs:  spec.Root.Readonly,
 		Hostname:    spec.Hostname,
 		Labels:      append(labels, fmt.Sprintf("bundle=%s", cwd)),
+		Rootless:    opts.Rootless,
 	}
 
 	exists := false

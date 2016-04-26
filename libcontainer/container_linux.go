@@ -46,7 +46,6 @@ type linuxContainer struct {
 	criuVersion   int
 	state         containerState
 	created       time.Time
-	rootless      bool
 }
 
 // State represents a running container's state
@@ -361,7 +360,7 @@ func (c *linuxContainer) newInitConfig(process *Process) *initConfig {
 		PassedFilesCount: len(process.ExtraFiles),
 		ContainerId:      c.ID(),
 		NoNewPrivileges:  c.config.NoNewPrivileges,
-		Rootless:         c.rootless,
+		Rootless:         c.config.Rootless,
 		AppArmorProfile:  c.config.AppArmorProfile,
 		ProcessLabel:     c.config.ProcessLabel,
 		Rlimits:          c.config.Rlimits,
@@ -1139,7 +1138,7 @@ func (c *linuxContainer) currentState() (*State, error) {
 			InitProcessStartTime: startTime,
 			Created:              c.created,
 		},
-		Rootless:            c.rootless,
+		Rootless:            c.config.Rootless,
 		CgroupPaths:         c.cgroupManager.GetPaths(),
 		NamespacePaths:      make(map[configs.NamespaceType]string),
 		ExternalDescriptors: externalDescriptors,
@@ -1270,7 +1269,7 @@ func (c *linuxContainer) bootstrapData(cloneFlags uintptr, nsMaps map[configs.Na
 				Value: b,
 			})
 			// The following only applies if we are root.
-			if !c.rootless {
+			if !c.config.Rootless {
 				// check if we have CAP_SETGID to setgroup properly
 				pid, err := capability.NewPid(os.Getpid())
 				if err != nil {
@@ -1289,7 +1288,7 @@ func (c *linuxContainer) bootstrapData(cloneFlags uintptr, nsMaps map[configs.Na
 	// write rootless
 	r.AddData(&Boolmsg{
 		Type:  RootlessAttr,
-		Value: c.rootless,
+		Value: c.config.Rootless,
 	})
 
 	return bytes.NewReader(r.Serialize()), nil

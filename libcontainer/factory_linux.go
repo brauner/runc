@@ -218,11 +218,7 @@ func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, err
 	if err := l.Validator.Validate(config); err != nil {
 		return nil, newGenericError(err, ConfigInvalid)
 	}
-	rootless, err := isRootless(config)
-	if err != nil {
-		return nil, newGenericError(err, ConfigInvalid)
-	}
-	if rootless {
+	if config.Rootless {
 		if err := new(validate.RootlessValidator).Validate(config); err != nil {
 			return nil, newGenericError(err, ConfigInvalid)
 		}
@@ -236,7 +232,8 @@ func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, err
 	if err := os.MkdirAll(containerRoot, 0700); err != nil {
 		return nil, newGenericError(err, SystemError)
 	}
-	if rootless {
+	// We have to use the RootlessManager.
+	if config.Rootless {
 		RootlessCgroups(l)
 	}
 	c := &linuxContainer{
@@ -247,7 +244,6 @@ func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, err
 		initArgs:      l.InitArgs,
 		criuPath:      l.CriuPath,
 		cgroupManager: l.NewCgroupsManager(config.Cgroups, nil),
-		rootless:      rootless,
 	}
 	c.state = &stoppedState{c: c}
 	return c, nil
@@ -277,7 +273,6 @@ func (l *LinuxFactory) Load(id string) (Container, error) {
 		cgroupManager: l.NewCgroupsManager(state.Config.Cgroups, state.CgroupPaths),
 		root:          containerRoot,
 		created:       state.Created,
-		rootless:      state.Rootless,
 	}
 	c.state = &loadedState{c: c}
 	if err := c.refreshState(); err != nil {

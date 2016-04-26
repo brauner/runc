@@ -166,12 +166,18 @@ func createPidFile(path string, process *libcontainer.Process) error {
 	return os.Rename(tmpName, path)
 }
 
+// XXX: Currently we autodetect rootless mode.
+func isRootless() bool {
+	return os.Geteuid() != 0
+}
+
 func createContainer(context *cli.Context, id string, spec *specs.Spec) (libcontainer.Container, error) {
 	config, err := specconv.CreateLibcontainerConfig(&specconv.CreateOpts{
 		CgroupName:       id,
 		UseSystemdCgroup: context.GlobalBool("systemd-cgroup"),
 		NoPivotRoot:      context.Bool("no-pivot"),
 		Spec:             spec,
+		Rootless:         isRootless(),
 	})
 	if err != nil {
 		return nil, err

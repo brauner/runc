@@ -187,6 +187,9 @@ type Config struct {
 
 	// Labels are user defined metadata that is stored in the config and populated on the state
 	Labels []string `json:"labels"`
+
+	// Rootless specifies whether the container is a rootless container.
+	Rootless bool `json:"rootless"`
 }
 
 type Hooks struct {
