@@ -2,28 +2,25 @@ package validate
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 
 	"github.com/opencontainers/runc/libcontainer/configs"
 )
 
-type RootlessValidator struct {
-}
-
-func (v *RootlessValidator) Validate(config *configs.Config) error {
-	// There's nothing to validate.
-	if config == nil {
-		return nil
+func (v *ConfigValidator) rootless(config *configs.Config) error {
+	if err := rootlessMappings(config); err != nil {
+		return err
 	}
-
-	if err := v.mount(config); err != nil {
+	if err := rootlessMount(config); err != nil {
 		return err
 	}
 	// Currently, cgroups cannot effectively be used in rootless containers.
-	// However, in Linux >=4.6 this may no longer be the case due to the
-	// cgroup namespace being merged.
-	if err := v.cgroup(config); err != nil {
+	// The new cgroup namespace doesn't really help us either because it doesn't
+	// have nice interactions with the user namespace (we're working with upstream
+	// to fix this).
+	if err := rootlessCgroup(config); err != nil {
 		return err
 	}
 
@@ -34,14 +31,50 @@ func (v *RootlessValidator) Validate(config *configs.Config) error {
 	return nil
 }
 
+func rootlessMappings(config *configs.Config) error {
+	rootuid, err := config.HostUID()
+	if err != nil {
+		return fmt.Errorf("failed to get root uid from uidMappings: %v", err)
+	}
+	if euid := os.Geteuid(); euid != 0 {
+		if !config.Namespaces.Contains(configs.NEWUSER) {
+			return fmt.Errorf("rootless containers require user namespaces")
+		}
+		if rootuid != euid {
+			return fmt.Errorf("rootless containers cannot map container root to a different host user")
+		}
+	}
+
+	rootgid, err := config.HostGID()
+	if err != nil {
+		return fmt.Errorf("failed to get root gid from gidMappings: %v", err)
+	}
+
+	// Similar to the above test, we need to make sure that we aren't trying to
+	// map to a group ID that we don't have the right to be.
+	if rootgid != os.Getegid() {
+		return fmt.Errorf("rootless containers cannot map container root to a different host group")
+	}
+
+	// We can only map one user and group inside a container (our own).
+	if len(config.UidMappings) != 1 || config.UidMappings[0].Size != 1 {
+		return fmt.Errorf("rootless containers cannot map more than one user")
+	}
+	if len(config.GidMappings) != 1 || config.GidMappings[0].Size != 1 {
+		return fmt.Errorf("rootless containers cannot map more than one group")
+	}
+
+	return nil
+}
+
 // cgroup verifies that the user isn't trying to set any cgroup limits or paths.
-func (v *RootlessValidator) cgroup(config *configs.Config) error {
+func rootlessCgroup(config *configs.Config) error {
 	// Nothing set at all.
 	if config.Cgroups == nil || config.Cgroups.Resources == nil {
 		return nil
 	}
 
-	// Used for comparison.
+	// Used for comparing to the zero value.
 	left := reflect.ValueOf(*config.Cgroups.Resources)
 	right := reflect.Zero(left.Type())
 
@@ -57,7 +90,7 @@ func (v *RootlessValidator) cgroup(config *configs.Config) error {
 // mount verifies that the user isn't trying to set up any mounts they don't have
 // the rights to do. In addition, it makes sure that no mount has a `uid=` or
 // `gid=` option that doesn't resolve to root.
-func (v *RootlessValidator) mount(config *configs.Config) error {
+func rootlessMount(config *configs.Config) error {
 	// XXX: We could whitelist allowed devices at this point, but I'm not
 	//      convinced that's a good idea. The kernel is the best arbiter of
 	//      access control.

@@ -164,50 +164,6 @@ type LinuxFactory struct {
 	NewCgroupsManager func(config *configs.Cgroup, paths map[string]string) cgroups.Manager
 }
 
-func isRootless(config *configs.Config) (bool, error) {
-	// There are two cases where we have to bail. If the user is trying to run
-	// without user namespaces or if they are trying to run with user namespaces
-	// where the remapping isn't their own user. These only apply for non-root
-	// users.
-	rootless := false
-
-	rootuid, err := config.HostUID()
-	if err != nil {
-		return false, err
-	}
-	if euid := os.Geteuid(); euid != 0 {
-		if !config.Namespaces.Contains(configs.NEWUSER) {
-			return false, fmt.Errorf("rootless containers require user namespaces")
-		}
-		if rootuid != euid {
-			return false, fmt.Errorf("rootless containers cannot map container root to a different host user")
-		}
-		// Thus, we are going to be running under unprivileged user namespaces.
-		rootless = true
-	}
-	rootgid, err := config.HostGID()
-	if err != nil {
-		return false, err
-	}
-	// Similar to the above test, we need to make sure that we aren't trying to
-	// map to a group ID that we don't have the right to be.
-	if rootless && rootgid != os.Getegid() {
-		return false, fmt.Errorf("rootless containers cannot map container root to a different host group")
-	}
-
-	// We can only map one user and group inside a container (our own).
-	if rootless {
-		if len(config.UidMappings) != 1 || config.UidMappings[0].Size != 1 {
-			return false, fmt.Errorf("rootless containers cannot map more than one user")
-		}
-		if len(config.GidMappings) != 1 || config.GidMappings[0].Size != 1 {
-			return false, fmt.Errorf("rootless containers cannot map more than one group")
-		}
-	}
-
-	return rootless, nil
-}
-
 func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, error) {
 	if l.Root == "" {
 		return nil, newGenericError(fmt.Errorf("invalid root"), ConfigInvalid)
@@ -217,11 +173,6 @@ func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, err
 	}
 	if err := l.Validator.Validate(config); err != nil {
 		return nil, newGenericError(err, ConfigInvalid)
-	}
-	if config.Rootless {
-		if err := new(validate.RootlessValidator).Validate(config); err != nil {
-			return nil, newGenericError(err, ConfigInvalid)
-		}
 	}
 	containerRoot := filepath.Join(l.Root, id)
 	if _, err := os.Stat(containerRoot); err == nil {
