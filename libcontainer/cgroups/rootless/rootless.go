@@ -10,6 +10,33 @@ import (
 	"github.com/opencontainers/runc/libcontainer/configs"
 )
 
+// TODO: This is copied from libcontainer/cgroups/fs, which duplicates this code
+//       needlessly. We should probably export this list.
+
+var subsystems = []subsystem{
+	&fs.CpusetGroup{},
+	&fs.DevicesGroup{},
+	&fs.MemoryGroup{},
+	&fs.CpuGroup{},
+	&fs.CpuacctGroup{},
+	&fs.PidsGroup{},
+	&fs.BlkioGroup{},
+	&fs.HugetlbGroup{},
+	&fs.NetClsGroup{},
+	&fs.NetPrioGroup{},
+	&fs.PerfEventGroup{},
+	&fs.FreezerGroup{},
+	&fs.NameGroup{GroupName: "name=systemd"},
+}
+
+type subsystem interface {
+	// Name returns the name of the subsystem.
+	Name() string
+
+	// Returns the stats, as 'stats', corresponding to the cgroup under 'path'.
+	GetStats(path string, stats *cgroups.Stats) error
+}
+
 // The noop cgroup manager is used for rootless containers, because we currently
 // cannot manage cgroups if we are in a rootless setup. This manager is chosen
 // by factory if we are in rootless mode. We error out if any cgroup options are
@@ -35,6 +62,21 @@ func (m *Manager) Apply(pid int) error {
 		return fmt.Errorf("cannot change cgroup path in rootless container")
 	}
 
+	// We load the paths into the manager.
+	paths := make(map[string]string)
+	for _, sys := range subsystems {
+		name := sys.Name()
+
+		path, err := cgroups.GetOwnCgroupPath(name)
+		if err != nil {
+			// Ignore paths we couldn't resolve.
+			continue
+		}
+
+		paths[name] = path
+	}
+
+	m.Paths = paths
 	return nil
 }
 

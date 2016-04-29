@@ -228,6 +228,15 @@ func GetOwnCgroup(subsystem string) (string, error) {
 	return getControllerPath(subsystem, cgroups)
 }
 
+func GetOwnCgroupPath(subsystem string) (string, error) {
+	cgroup, err := GetOwnCgroup(subsystem)
+	if err != nil {
+		return "", err
+	}
+
+	return getCgroupPathHelper(subsystem, cgroup)
+}
+
 func GetInitCgroup(subsystem string) (string, error) {
 	cgroups, err := ParseCgroupFile("/proc/1/cgroup")
 	if err != nil {
@@ -235,6 +244,29 @@ func GetInitCgroup(subsystem string) (string, error) {
 	}
 
 	return getControllerPath(subsystem, cgroups)
+}
+
+func GetInitCgroupPath(subsystem string) (string, error) {
+	cgroup, err := GetInitCgroup(subsystem)
+	if err != nil {
+		return "", err
+	}
+
+	return getCgroupPathHelper(subsystem, cgroup)
+}
+
+func getCgroupPathHelper(subsystem, cgroup string) (string, error) {
+	mnt, root, err := FindCgroupMountpointAndRoot(subsystem)
+	if err != nil {
+		return "", err
+	}
+
+	relCgroup, err := filepath.Rel(root, cgroup)
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(mnt, relCgroup), nil
 }
 
 func readProcsFile(dir string) ([]int, error) {
