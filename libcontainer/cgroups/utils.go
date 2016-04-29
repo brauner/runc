@@ -128,7 +128,7 @@ type Mount struct {
 	Subsystems []string
 }
 
-func (m Mount) GetThisCgroupDir(cgroups map[string]string) (string, error) {
+func (m Mount) GetOwnCgroup(cgroups map[string]string) (string, error) {
 	if len(m.Subsystems) == 0 {
 		return "", fmt.Errorf("no subsystem for mount")
 	}
@@ -218,8 +218,8 @@ func GetAllSubsystems() ([]string, error) {
 	return subsystems, nil
 }
 
-// GetThisCgroupDir returns the relative path to the cgroup docker is running in.
-func GetThisCgroupDir(subsystem string) (string, error) {
+// GetOwnCgroup returns the relative path to the cgroup docker is running in.
+func GetOwnCgroup(subsystem string) (string, error) {
 	cgroups, err := ParseCgroupFile("/proc/self/cgroup")
 	if err != nil {
 		return "", err
@@ -228,8 +228,7 @@ func GetThisCgroupDir(subsystem string) (string, error) {
 	return getControllerPath(subsystem, cgroups)
 }
 
-func GetInitCgroupDir(subsystem string) (string, error) {
-
+func GetInitCgroup(subsystem string) (string, error) {
 	cgroups, err := ParseCgroupFile("/proc/1/cgroup")
 	if err != nil {
 		return "", err

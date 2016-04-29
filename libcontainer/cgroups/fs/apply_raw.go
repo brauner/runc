@@ -294,10 +294,10 @@ func getCgroupData(c *configs.Cgroup, pid int) (*cgroupData, error) {
 }
 
 func (raw *cgroupData) parentPath(subsystem, mountpoint, root string) (string, error) {
-	// Use GetThisCgroupDir instead of GetInitCgroupDir, because the creating
+	// Use GetOwnCgroup instead of GetInitCgroup, because the creating
 	// process could in container and shared pid namespace with host, and
 	// /proc/1/cgroup could point to whole other world of cgroups.
-	initPath, err := cgroups.GetThisCgroupDir(subsystem)
+	initPath, err := cgroups.GetOwnCgroup(subsystem)
 	if err != nil {
 		return "", err
 	}
