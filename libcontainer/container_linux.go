@@ -515,6 +515,13 @@ func (c *linuxContainer) Checkpoint(criuOpts *CriuOpts) error {
 	c.m.Lock()
 	defer c.m.Unlock()
 
+	// TODO(avagin): Figure out how to make this work nicely. CRIU 2.0 has
+	//               support for doing unprivileged dumps, but the setup of
+	//               rootless containers might make this complicated.
+	if c.config.Rootless {
+		return fmt.Errorf("cannot checkpoint a rootless container")
+	}
+
 	if err := c.checkCriuVersion("1.5.2"); err != nil {
 		return err
 	}
@@ -662,6 +669,13 @@ func (c *linuxContainer) restoreNetwork(req *criurpc.CriuReq, criuOpts *CriuOpts
 func (c *linuxContainer) Restore(process *Process, criuOpts *CriuOpts) error {
 	c.m.Lock()
 	defer c.m.Unlock()
+
+	// TODO(avagin): Figure out how to make this work nicely. CRIU doesn't have
+	//               support for unprivileged restore at the moment.
+	if c.config.Rootless {
+		return fmt.Errorf("cannot restore a rootless container")
+	}
+
 	if err := c.checkCriuVersion("1.5.2"); err != nil {
 		return err
 	}
