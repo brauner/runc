@@ -214,6 +214,10 @@ func (l *LinuxFactory) Load(id string) (Container, error) {
 		processStartTime: state.InitProcessStartTime,
 		fds:              state.ExternalDescriptors,
 	}
+	// We have to use the RootlessManager.
+	if state.Rootless {
+		RootlessCgroups(l)
+	}
 	c := &linuxContainer{
 		initProcess:   r,
 		id:            id,
