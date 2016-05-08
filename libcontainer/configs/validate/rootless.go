@@ -9,6 +9,11 @@ import (
 	"github.com/opencontainers/runc/libcontainer/configs"
 )
 
+var (
+	geteuid = os.Geteuid
+	getegid = os.Getegid
+)
+
 func (v *ConfigValidator) rootless(config *configs.Config) error {
 	if err := rootlessMappings(config); err != nil {
 		return err
@@ -36,7 +41,7 @@ func rootlessMappings(config *configs.Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to get root uid from uidMappings: %v", err)
 	}
-	if euid := os.Geteuid(); euid != 0 {
+	if euid := geteuid(); euid != 0 {
 		if !config.Namespaces.Contains(configs.NEWUSER) {
 			return fmt.Errorf("rootless containers require user namespaces")
 		}
@@ -52,7 +57,7 @@ func rootlessMappings(config *configs.Config) error {
 
 	// Similar to the above test, we need to make sure that we aren't trying to
 	// map to a group ID that we don't have the right to be.
-	if rootgid != os.Getegid() {
+	if rootgid != getegid() {
 		return fmt.Errorf("rootless containers cannot map container root to a different host group")
 	}
 
