@@ -141,10 +141,22 @@ func Example() *specs.Spec {
 // containers. It's essentially a modified version of the specfile from
 // Example().
 func ToRootless(spec *specs.Spec) {
+	var namespaces []specs.Namespace
+
+	// Remove networkns from the spec.
+	for _, ns := range spec.Linux.Namespaces {
+		switch ns.Type {
+		case specs.NetworkNamespace, specs.UserNamespace:
+			// Do nothing.
+		default:
+			namespaces = append(namespaces, ns)
+		}
+	}
 	// Add userns to the spec.
-	spec.Linux.Namespaces = append(spec.Linux.Namespaces, specs.Namespace{
+	namespaces = append(namespaces, specs.Namespace{
 		Type: specs.UserNamespace,
 	})
+	spec.Linux.Namespaces = namespaces
 
 	// Add mappings for the current user.
 	spec.Linux.UIDMappings = []specs.IDMapping{{
@@ -158,16 +170,33 @@ func ToRootless(spec *specs.Spec) {
 		Size:        1,
 	}}
 
-	// Remove all gid= and uid= mappings.
-	for i, mount := range spec.Mounts {
+	// Fix up mounts.
+	var mounts []specs.Mount
+	for _, mount := range spec.Mounts {
+		// Ignore all mounts that are under /sys.
+		if strings.HasPrefix(mount.Destination, "/sys") {
+			continue
+		}
+
+		// Remove all gid= and uid= mappings.
 		var options []string
 		for _, option := range mount.Options {
 			if !strings.HasPrefix(option, "gid=") && !strings.HasPrefix(option, "uid=") {
 				options = append(options, option)
 			}
 		}
-		spec.Mounts[i].Options = options
+
+		mount.Options = options
+		mounts = append(mounts, mount)
 	}
+	// Add the sysfs mount as an rbind.
+	mounts = append(mounts, specs.Mount{
+		Source:      "/sys",
+		Destination: "/sys",
+		Type:        "none",
+		Options:     []string{"rbind", "nosuid", "noexec", "nodev", "ro"},
+	})
+	spec.Mounts = mounts
 
 	// Remove cgroup settings.
 	spec.Linux.Resources = nil
