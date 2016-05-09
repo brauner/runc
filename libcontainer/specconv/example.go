@@ -1,16 +1,18 @@
 package specconv
 
 import (
+	"os"
 	"runtime"
+	"strings"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
 func sPtr(s string) *string { return &s }
 
-// ExampleSpec returns an example spec file, with many options set so a user
-// can see what a standard spec file looks like.
-func ExampleSpec() *specs.Spec {
+// Example returns an example spec file, with many options set so a user can
+// see what a standard spec file looks like.
+func Example() *specs.Spec {
 	return &specs.Spec{
 		Version: specs.Version,
 		Platform: specs.Platform{
@@ -133,4 +135,40 @@ func ExampleSpec() *specs.Spec {
 			},
 		},
 	}
+}
+
+// ExampleRootless returns an example spec file that works with rootless
+// containers. It's essentially a modified version of the specfile from
+// Example().
+func ToRootless(spec *specs.Spec) {
+	// Add userns to the spec.
+	spec.Linux.Namespaces = append(spec.Linux.Namespaces, specs.Namespace{
+		Type: specs.UserNamespace,
+	})
+
+	// Add mappings for the current user.
+	spec.Linux.UIDMappings = []specs.IDMapping{{
+		HostID:      uint32(os.Geteuid()),
+		ContainerID: 0,
+		Size:        1,
+	}}
+	spec.Linux.GIDMappings = []specs.IDMapping{{
+		HostID:      uint32(os.Getegid()),
+		ContainerID: 0,
+		Size:        1,
+	}}
+
+	// Remove all gid= and uid= mappings.
+	for i, mount := range spec.Mounts {
+		var options []string
+		for _, option := range mount.Options {
+			if !strings.HasPrefix(option, "gid=") && !strings.HasPrefix(option, "uid=") {
+				options = append(options, option)
+			}
+		}
+		spec.Mounts[i].Options = options
+	}
+
+	// Remove cgroup settings.
+	spec.Linux.Resources = nil
 }
