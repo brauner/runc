@@ -34,11 +34,25 @@ ROOTLESS=$(id -u)
 # Wrapper for runc.
 function runc() {
   run __runc "$@"
+  if [ "${status}" -ne 0 ]; then
+	  echo "runc $@: ${output}" >&2
+  fi
 }
 
 # Raw wrapper for runc.
 function __runc() {
   "$RUNC" --root "$ROOT" "$@"
+}
+
+# Wrapper for runc spec.
+function runc_spec() {
+	local args=""
+
+	if [ "$ROOTLESS" -ne 0 ]; then
+		args+="--rootless"
+	fi
+
+	runc spec $args "$@"
 }
 
 # Fails the current test, providing the error given.
@@ -143,17 +157,17 @@ function setup_busybox() {
   if [ ! -e $BUSYBOX_IMAGE ]; then
     curl -o $BUSYBOX_IMAGE -sSL 'https://github.com/jpetazzo/docker-busybox/raw/buildroot-2014.11/rootfs.tar'
   fi
-  tar -C "$BUSYBOX_BUNDLE"/rootfs -xf "$BUSYBOX_IMAGE"
+  tar --exclude './dev/*' -C "$BUSYBOX_BUNDLE"/rootfs -xf "$BUSYBOX_IMAGE"
   cd "$BUSYBOX_BUNDLE"
-  runc spec
+  runc_spec
 }
 
 function setup_hello() {
   run mkdir "$HELLO_BUNDLE"
   run mkdir "$HELLO_BUNDLE"/rootfs
-  tar -C "$HELLO_BUNDLE"/rootfs -xf "$HELLO_IMAGE"
+  tar --exclude './dev/*' -C "$HELLO_BUNDLE"/rootfs -xf "$HELLO_IMAGE"
   cd "$HELLO_BUNDLE"
-  runc spec
+  runc_spec
   sed -i 's;"sh";"/hello";' config.json
 }
 
