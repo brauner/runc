@@ -108,12 +108,12 @@ func (m *Manager) GetAllPids() ([]int, error) {
 }
 
 func (m *Manager) GetStats() (*cgroups.Stats, error) {
-	// We can just use the fs manager to get the appropriate stats.
-	otherm := fs.Manager{
-		Cgroups: m.Cgroups,
-		Paths:   m.Paths,
-	}
-	return otherm.GetStats()
+	// TODO(cyphar): We can make this work if we figure out a way to allow usage
+	//               of cgroups with a rootless container. While this doesn't
+	//               actually require write access to a cgroup directory, the
+	//               statistics are not useful if they can be affected by
+	//               non-container processes.
+	return nil, fmt.Errorf("cannot get cgroup stats in rootless container")
 }
 
 func (m *Manager) Freeze(state configs.FreezerState) error {
