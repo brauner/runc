@@ -8,6 +8,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/cgroups/fs"
 	"github.com/opencontainers/runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libcontainer/configs/validate"
 )
 
 // TODO: This is copied from libcontainer/cgroups/fs, which duplicates this code
@@ -85,8 +86,9 @@ func (m *Manager) GetPaths() map[string]string {
 }
 
 func (m *Manager) Set(container *configs.Config) error {
-	// We don't have to do any checks here. They were already done in validate/rootless.go.
-	return nil
+	// We have to re-do the validation here, since someone might decide to
+	// update a rootless container.
+	return validate.New().Validate(container)
 }
 
 func (m *Manager) GetPids() ([]int, error) {
