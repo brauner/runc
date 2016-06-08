@@ -26,7 +26,8 @@ func (s *DevicesGroup) Apply(d *cgroupData) error {
 }
 
 func (s *DevicesGroup) Set(path string, cgroup *configs.Cgroup) error {
-	if system.RunningInUserNS() {
+	// Settings devices.allow/devices.deny requires CAP_SYS_ADMIN.
+	if system.RunningInUserNS() || cgroup.Rootless {
 		return nil
 	}
 

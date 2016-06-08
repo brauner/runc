@@ -15,6 +15,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	libcontainerUtils "github.com/opencontainers/runc/libcontainer/utils"
+	"golang.org/x/sys/unix"
 )
 
 var (
@@ -102,6 +103,13 @@ type cgroupData struct {
 	pid       int
 }
 
+func (m *Manager) CanWrite(path string) bool {
+	if unix.Access(path, unix.W_OK) == nil {
+		return true
+	}
+	return false
+}
+
 func (m *Manager) Apply(pid int) (err error) {
 	if m.Cgroups == nil {
 		return nil
@@ -124,6 +132,9 @@ func (m *Manager) Apply(pid int) (err error) {
 				}
 				return err
 			}
+			if !m.CanWrite(path) {
+				return err
+			}
 			paths[name] = path
 		}
 		m.Paths = paths
@@ -134,6 +145,18 @@ func (m *Manager) Apply(pid int) (err error) {
 	defer m.mu.Unlock()
 	paths := make(map[string]string)
 	for _, sys := range subsystems {
+		if c.Rootless { // Avoid work
+			path, err := cgroups.GetOwnCgroupPath(sys.Name())
+			if err != nil {
+				// Ignore paths we couldn't resolve.
+				continue
+			}
+			if !cgroups.CanWrite(path) {
+				paths[sys.Name()] = path
+				continue
+			}
+		}
+
 		if err := sys.Apply(d); err != nil {
 			return err
 		}
@@ -142,7 +165,7 @@ func (m *Manager) Apply(pid int) (err error) {
 		// created then join consists of writing the process pids to cgroup.procs
 		p, err := d.path(sys.Name())
 		if err != nil {
-			if cgroups.IsNotFound(err) {
+			if cgroups.IsNotFound(err) && (sys.Name() != "devices" || c.Rootless) {
 				continue
 			}
 			return err
@@ -191,13 +214,21 @@ func (m *Manager) GetStats() (*cgroups.Stats, error) {
 
 func (m *Manager) Set(container *configs.Config) error {
 	for _, sys := range subsystems {
+		path, err := cgroups.GetOwnCgroupPath(sys.Name())
+		if err != nil {
+			// Ignore paths we couldn't resolve.
+			continue
+		}
+		if !m.CanWrite(path) {
+			continue
+		}
 		// Generate fake cgroup data.
 		d, err := getCgroupData(container.Cgroups, -1)
 		if err != nil {
 			return err
 		}
 		// Get the path, but don't error out if the cgroup wasn't found.
-		path, err := d.path(sys.Name())
+		path, err = d.path(sys.Name())
 		if err != nil && !cgroups.IsNotFound(err) {
 			return err
 		}
@@ -301,7 +332,9 @@ func (raw *cgroupData) path(subsystem string) (string, error) {
 	}
 
 	// If the cgroup name/path is absolute do not look relative to the cgroup of the init process.
-	if filepath.IsAbs(raw.innerPath) {
+	// However, when we are unprivileged/rootless always take the path to be
+	// relative to the root cgroup.
+	if filepath.IsAbs(raw.innerPath) && !raw.config.Rootless {
 		// Sometimes subsystems can be mounted togethger as 'cpu,cpuacct'.
 		return filepath.Join(raw.root, filepath.Base(mnt), raw.innerPath), nil
 	}
