@@ -3,7 +3,6 @@ package validate
 import (
 	"fmt"
 	"os"
-	"reflect"
 	"strings"
 
 	"github.com/opencontainers/runc/libcontainer/configs"
@@ -19,13 +18,6 @@ func (v *ConfigValidator) rootless(config *configs.Config) error {
 		return err
 	}
 	if err := rootlessMount(config); err != nil {
-		return err
-	}
-	// Currently, cgroups cannot effectively be used in rootless containers.
-	// The new cgroup namespace doesn't really help us either because it doesn't
-	// have nice interactions with the user namespace (we're working with upstream
-	// to fix this).
-	if err := rootlessCgroup(config); err != nil {
 		return err
 	}
 
@@ -74,21 +66,6 @@ func rootlessMappings(config *configs.Config) error {
 
 // cgroup verifies that the user isn't trying to set any cgroup limits or paths.
 func rootlessCgroup(config *configs.Config) error {
-	// Nothing set at all.
-	if config.Cgroups == nil || config.Cgroups.Resources == nil {
-		return nil
-	}
-
-	// Used for comparing to the zero value.
-	left := reflect.ValueOf(*config.Cgroups.Resources)
-	right := reflect.Zero(left.Type())
-
-	// This is all we need to do, since specconv won't add cgroup options in
-	// rootless mode.
-	if !reflect.DeepEqual(left.Interface(), right.Interface()) {
-		return fmt.Errorf("cannot specify resource limits in rootless container")
-	}
-
 	return nil
 }
 

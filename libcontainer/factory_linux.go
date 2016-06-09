@@ -17,7 +17,6 @@ import (
 	"github.com/docker/docker/pkg/mount"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/cgroups/fs"
-	"github.com/opencontainers/runc/libcontainer/cgroups/rootless"
 	"github.com/opencontainers/runc/libcontainer/cgroups/systemd"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/configs/validate"
@@ -96,7 +95,7 @@ func Cgroupfs(l *LinuxFactory) error {
 // It should only be used in conjunction with rootless containers.
 func RootlessCgroups(l *LinuxFactory) error {
 	l.NewCgroupsManager = func(config *configs.Cgroup, paths map[string]string) cgroups.Manager {
-		return &rootless.Manager{
+		return &fs.Manager{
 			Cgroups: config,
 			Paths:   paths,
 		}
