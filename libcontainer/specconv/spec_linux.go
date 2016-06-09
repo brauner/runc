@@ -13,7 +13,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/seccomp"
 	libcontainerUtils "github.com/opencontainers/runc/libcontainer/utils"
@@ -258,7 +257,6 @@ func createLibcontainerMount(cwd string, m specs.Mount) *configs.Mount {
 
 func createCgroupConfig(opts *CreateOpts) (*configs.Cgroup, error) {
 	var (
-		err          error
 		myCgroupPath string
 
 		spec             = opts.Spec
@@ -268,6 +266,9 @@ func createCgroupConfig(opts *CreateOpts) (*configs.Cgroup, error) {
 
 	c := &configs.Cgroup{
 		Resources: &configs.Resources{},
+	}
+	if opts.Rootless {
+		c.Rootless = true
 	}
 
 	if spec.Linux.CgroupsPath != nil {
@@ -295,11 +296,7 @@ func createCgroupConfig(opts *CreateOpts) (*configs.Cgroup, error) {
 		}
 	} else {
 		if myCgroupPath == "" {
-			myCgroupPath, err = cgroups.GetOwnCgroup("devices")
-			if err != nil {
-				return nil, err
-			}
-			myCgroupPath = filepath.Join(myCgroupPath, name)
+			myCgroupPath = filepath.Join("/runc", name)
 		}
 		c.Path = myCgroupPath
 	}
