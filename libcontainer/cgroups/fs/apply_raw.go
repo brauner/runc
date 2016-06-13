@@ -15,7 +15,6 @@ import (
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	libcontainerUtils "github.com/opencontainers/runc/libcontainer/utils"
-	"golang.org/x/sys/unix"
 )
 
 var (
@@ -103,13 +102,6 @@ type cgroupData struct {
 	pid       int
 }
 
-func (m *Manager) CanWrite(path string) bool {
-	if unix.Access(path, unix.W_OK) == nil {
-		return true
-	}
-	return false
-}
-
 func (m *Manager) Apply(pid int) (err error) {
 	if m.Cgroups == nil {
 		return nil
@@ -132,7 +124,7 @@ func (m *Manager) Apply(pid int) (err error) {
 				}
 				return err
 			}
-			if !m.CanWrite(path) {
+			if !cgroups.CanWrite(path) {
 				return err
 			}
 			paths[name] = path
@@ -219,7 +211,7 @@ func (m *Manager) Set(container *configs.Config) error {
 			// Ignore paths we couldn't resolve.
 			continue
 		}
-		if !m.CanWrite(path) {
+		if !cgroups.CanWrite(path) {
 			continue
 		}
 		// Generate fake cgroup data.

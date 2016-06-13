@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/docker/go-units"
+	"golang.org/x/sys/unix"
 )
 
 const cgroupNamePrefix = "name="
@@ -425,4 +426,12 @@ func GetAllPids(path string) ([]int, error) {
 		return nil
 	})
 	return pids, err
+}
+
+// Determine if cgroup is writeable.
+func CanWrite(path string) bool {
+	if unix.Access(path, unix.W_OK) == nil {
+		return true
+	}
+	return false
 }
