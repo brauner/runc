@@ -210,13 +210,18 @@ func (m *Manager) GetStats() (*cgroups.Stats, error) {
 
 func (m *Manager) Set(container *configs.Config) error {
 	for _, sys := range subsystems {
-		path, err := cgroups.GetOwnCgroupPath(sys.Name())
-		if err != nil {
-			// Ignore paths we couldn't resolve.
-			continue
-		}
-		if !cgroups.CanWrite(path) {
-			continue
+		c := m.Cgroups
+		if c.Rootless { // Avoid work
+			path, err := cgroups.GetOwnCgroupPath(sys.Name())
+			if err != nil {
+				// Ignore paths we couldn't resolve.
+				continue
+			}
+			if !cgroups.CanWrite(path) && !sys.IsZero(c) {
+				return fmt.Errorf("Requested resource restriction for %s subsystem can not be applied.", sys.Name())
+			} else if !cgroups.CanWrite(path) {
+				continue
+			}
 		}
 		// Generate fake cgroup data.
 		d, err := getCgroupData(container.Cgroups, -1)
@@ -224,7 +229,7 @@ func (m *Manager) Set(container *configs.Config) error {
 			return err
 		}
 		// Get the path, but don't error out if the cgroup wasn't found.
-		path, err = d.path(sys.Name())
+		path, err := d.path(sys.Name())
 		if err != nil && !cgroups.IsNotFound(err) {
 			return err
 		}
