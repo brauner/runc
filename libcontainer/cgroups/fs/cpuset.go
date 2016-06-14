@@ -22,6 +22,16 @@ func (s *CpusetGroup) Name() string {
 	return "cpuset"
 }
 
+func (s *CpusetGroup) IsZero(cgroup *configs.Cgroup) bool {
+	if cgroup.Resources.CpusetCpus != "" {
+		return false
+	}
+	if cgroup.Resources.CpusetMems != "" {
+		return false
+	}
+	return true
+}
+
 func (s *CpusetGroup) Apply(d *cgroupData) error {
 	dir, err := d.path("cpuset")
 	if err != nil && !cgroups.IsNotFound(err) {

@@ -18,6 +18,13 @@ func (s *PidsGroup) Name() string {
 	return "pids"
 }
 
+func (s *PidsGroup) IsZero(cgroup *configs.Cgroup) bool {
+	if cgroup.Resources.PidsLimit != 0 {
+		return false
+	}
+	return true
+}
+
 func (s *PidsGroup) Apply(d *cgroupData) error {
 	_, err := d.join("pids")
 	if err != nil && !cgroups.IsNotFound(err) {

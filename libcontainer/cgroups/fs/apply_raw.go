@@ -61,6 +61,8 @@ type subsystem interface {
 	Apply(*cgroupData) error
 	// Set the cgroup represented by cgroup.
 	Set(path string, cgroup *configs.Cgroup) error
+	// Determine if there are any resources that are supposed to be applied.
+	IsZero(cgroup *configs.Cgroup) bool
 }
 
 type Manager struct {

@@ -28,6 +28,10 @@ func (s *CpuacctGroup) Name() string {
 	return "cpuacct"
 }
 
+func (s *CpuacctGroup) IsZero(cgroup *configs.Cgroup) bool {
+	return true
+}
+
 func (s *CpuacctGroup) Apply(d *cgroupData) error {
 	// we just want to join this group even though we don't set anything
 	if _, err := d.join("cpuacct"); err != nil && !cgroups.IsNotFound(err) {

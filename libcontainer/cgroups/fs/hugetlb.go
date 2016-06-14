@@ -18,6 +18,13 @@ func (s *HugetlbGroup) Name() string {
 	return "hugetlb"
 }
 
+func (s *HugetlbGroup) IsZero(cgroup *configs.Cgroup) bool {
+	if len(cgroup.Resources.HugetlbLimit) > 0 {
+		return false
+	}
+	return true
+}
+
 func (s *HugetlbGroup) Apply(d *cgroupData) error {
 	_, err := d.join("hugetlb")
 	if err != nil && !cgroups.IsNotFound(err) {

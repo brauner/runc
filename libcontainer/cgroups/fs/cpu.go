@@ -19,6 +19,25 @@ func (s *CpuGroup) Name() string {
 	return "cpu"
 }
 
+func (s *CpuGroup) IsZero(cgroup *configs.Cgroup) bool {
+	if cgroup.Resources.CpuShares != 0 {
+		return false
+	}
+	if cgroup.Resources.CpuPeriod != 0 {
+		return false
+	}
+	if cgroup.Resources.CpuQuota != 0 {
+		return false
+	}
+	if cgroup.Resources.CpuRtPeriod != 0 {
+		return false
+	}
+	if cgroup.Resources.CpuRtRuntime != 0 {
+		return false
+	}
+	return true
+}
+
 func (s *CpuGroup) Apply(d *cgroupData) error {
 	// We always want to join the cpu group, to allow fair cpu scheduling
 	// on a container basis

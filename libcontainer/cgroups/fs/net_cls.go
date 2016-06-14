@@ -14,6 +14,13 @@ func (s *NetClsGroup) Name() string {
 	return "net_cls"
 }
 
+func (s *NetClsGroup) IsZero(cgroup *configs.Cgroup) bool {
+	if cgroup.Resources.NetClsClassid != "" {
+		return false
+	}
+	return true
+}
+
 func (s *NetClsGroup) Apply(d *cgroupData) error {
 	_, err := d.join("net_cls")
 	if err != nil && !cgroups.IsNotFound(err) {

@@ -14,6 +14,10 @@ func (s *PerfEventGroup) Name() string {
 	return "perf_event"
 }
 
+func (s *PerfEventGroup) IsZero(cgroup *configs.Cgroup) bool {
+	return true
+}
+
 func (s *PerfEventGroup) Apply(d *cgroupData) error {
 	// we just want to join this group even though we don't set anything
 	if _, err := d.join("perf_event"); err != nil && !cgroups.IsNotFound(err) {

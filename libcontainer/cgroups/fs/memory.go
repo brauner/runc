@@ -23,6 +23,33 @@ func (s *MemoryGroup) Name() string {
 	return "memory"
 }
 
+func (s *MemoryGroup) IsZero(cgroup *configs.Cgroup) bool {
+	if cgroup.Resources.Memory != 0 {
+		return false
+	}
+	if cgroup.Resources.MemorySwap > 0 {
+		return false
+	}
+	if cgroup.Resources.KernelMemory != 0 {
+		return false
+	}
+	if cgroup.Resources.MemoryReservation != 0 {
+		return false
+	}
+	if cgroup.Resources.KernelMemoryTCP != 0 {
+		return false
+	}
+	if cgroup.Resources.OomKillDisable {
+		return false
+	}
+	if cgroup.Resources.MemorySwappiness != nil {
+		return false
+	}
+	if cgroup.Resources.MemorySwappiness != nil {
+	}
+	return true
+}
+
 func (s *MemoryGroup) Apply(d *cgroupData) (err error) {
 	path, err := d.path("memory")
 	if err != nil && !cgroups.IsNotFound(err) {

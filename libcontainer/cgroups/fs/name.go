@@ -16,6 +16,10 @@ func (s *NameGroup) Name() string {
 	return s.GroupName
 }
 
+func (s *NameGroup) IsZero(cgroup *configs.Cgroup) bool {
+	return true
+}
+
 func (s *NameGroup) Apply(d *cgroupData) error {
 	if s.Join {
 		// ignore errors if the named cgroup does not exist

@@ -14,6 +14,13 @@ func (s *NetPrioGroup) Name() string {
 	return "net_prio"
 }
 
+func (s *NetPrioGroup) IsZero(cgroup *configs.Cgroup) bool {
+	if len(cgroup.Resources.NetPrioIfpriomap) > 0 {
+		return false
+	}
+	return true
+}
+
 func (s *NetPrioGroup) Apply(d *cgroupData) error {
 	_, err := d.join("net_prio")
 	if err != nil && !cgroups.IsNotFound(err) {

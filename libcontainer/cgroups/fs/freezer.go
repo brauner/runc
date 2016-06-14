@@ -18,6 +18,13 @@ func (s *FreezerGroup) Name() string {
 	return "freezer"
 }
 
+func (s *FreezerGroup) IsZero(cgroup *configs.Cgroup) bool {
+	if cgroup.Resources.Freezer != configs.Undefined {
+		return false
+	}
+	return true
+}
+
 func (s *FreezerGroup) Apply(d *cgroupData) error {
 	_, err := d.join("freezer")
 	if err != nil && !cgroups.IsNotFound(err) {

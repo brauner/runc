@@ -21,6 +21,31 @@ func (s *BlkioGroup) Name() string {
 	return "blkio"
 }
 
+func (s *BlkioGroup) IsZero(cgroup *configs.Cgroup) bool {
+	if cgroup.Resources.BlkioWeight != 0 {
+		return false
+	}
+	if cgroup.Resources.BlkioLeafWeight != 0 {
+		return false
+	}
+	for len(cgroup.Resources.BlkioWeightDevice) > 0 {
+		return false
+	}
+	for len(cgroup.Resources.BlkioThrottleReadBpsDevice) > 0 {
+		return false
+	}
+	for len(cgroup.Resources.BlkioThrottleWriteBpsDevice) > 0 {
+		return false
+	}
+	for len(cgroup.Resources.BlkioThrottleReadIOPSDevice) > 0 {
+		return false
+	}
+	for len(cgroup.Resources.BlkioThrottleWriteIOPSDevice) > 0 {
+		return false
+	}
+	return true
+}
+
 func (s *BlkioGroup) Apply(d *cgroupData) error {
 	_, err := d.join("blkio")
 	if err != nil && !cgroups.IsNotFound(err) {

@@ -15,6 +15,14 @@ func (s *DevicesGroup) Name() string {
 	return "devices"
 }
 
+func (s *DevicesGroup) IsZero(cgroup *configs.Cgroup) bool {
+	if system.RunningInUserNS() || cgroup.Rootless {
+		return true
+	}
+	// We always set resources devices.
+	return false
+}
+
 func (s *DevicesGroup) Apply(d *cgroupData) error {
 	_, err := d.join("devices")
 	if err != nil {
