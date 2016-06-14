@@ -145,7 +145,9 @@ func (m *Manager) Apply(pid int) (err error) {
 				// Ignore paths we couldn't resolve.
 				continue
 			}
-			if !cgroups.CanWrite(path) {
+			if !cgroups.CanWrite(path) && !sys.IsZero(c) {
+				return fmt.Errorf("Requested resource restriction for %s subsystem can not be applied.", sys.Name())
+			} else if !cgroups.CanWrite(path) {
 				paths[sys.Name()] = path
 				continue
 			}
